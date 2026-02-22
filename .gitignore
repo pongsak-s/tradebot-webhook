@@ -1,5 +1,8 @@
 node_modules
-dist
+packages/*/node_modules
+apps/*/node_modules
+apps/*/dist
+packages/*/dist
 .env
-.env.*
-.DS_Store
+*.log
+*.sqlite

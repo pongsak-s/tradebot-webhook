@@ -1,0 +1,17 @@
+{
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "dev:webhook": "npm --workspace apps/webhook run dev",
+    "dev:executor": "npm --workspace apps/executor run dev",
+    "dev:ui": "npm --workspace apps/ui run dev",
+    "test": "npm run test --workspaces"
+  },
+  "devDependencies": {
+    "typescript": "^4.9.5"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "projectId": "test-project",
+  "strategy": "breakout-v1",
+  "symbol": "BTCUSDT",
+  "side": "BUY",
+  "qtyType": "USDT",
+  "qty": 50,
+  "leverage": 5,
+  "entry": { "type": "MARKET" },
+  "time": "2026-02-22T14:00:00Z",
+  "signalId": "tv-20260222-test"
+}

@@ -1,0 +1,12 @@
+{
+  "files": [],
+  "compilerOptions": {
+    "composite": true
+  },
+  "references": [
+    { "path": "packages/shared" },
+    { "path": "apps/webhook" },
+    { "path": "apps/executor" },
+    { "path": "apps/ui" }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "name": "@monorepo/shared",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev"
+  },
+  "dependencies": {
+    "zod": "^3.20.2",
+    "dotenv": "^10.0.0",
+    "@prisma/client": "*"
+  },
+  "devDependencies": {
+    "typescript": "^4.9.5",
+    "prisma": "*"
+  }
+}
