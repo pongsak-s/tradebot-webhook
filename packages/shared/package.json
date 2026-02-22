@@ -9,12 +9,12 @@
     "prisma:migrate": "prisma migrate dev"
   },
   "dependencies": {
-    "zod": "^3.20.2",
+    "@prisma/client": "*",
     "dotenv": "^10.0.0",
-    "@prisma/client": "*"
+    "zod": "^3.20.2"
   },
   "devDependencies": {
-    "typescript": "^4.9.5",
-    "prisma": "*"
+    "prisma": "*",
+    "typescript": "^5.4.5"
   }
 }
