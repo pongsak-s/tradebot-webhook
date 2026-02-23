@@ -1,4 +1,3 @@
-version: '3.8'
 services:
   postgres:
     image: postgres:14
@@ -10,34 +9,40 @@ services:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - '5432:5432'
+
   webhook:
     build:
-      context: ./apps/webhook
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./apps/webhook/Dockerfile
     env_file:
       - apps/webhook/.env
     depends_on:
       - postgres
     ports:
       - '${WEBHOOK_PORT:-3000}:3000'
+
   executor:
     build:
-      context: ./apps/executor
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./apps/executor/Dockerfile
     env_file:
       - apps/executor/.env
     depends_on:
       - postgres
     ports:
       - '${EXECUTOR_PORT:-3001}:3001'
+
   ui:
     build:
-      context: ./apps/ui
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./apps/ui/Dockerfile
     env_file:
       - apps/ui/.env
+    depends_on:
+      - executor
     ports:
       - '${UI_PORT:-3002}:3002'
+
 volumes:
   postgres_data:
     driver: local
