@@ -468,6 +468,90 @@ server.get('/v1/projects/:projectId/pnl', async (request) => {
   return { projectId, pnl: snapshots };
 });
 
+
+server.get('/v1/projects/:projectId/risk', async (request, reply) => {
+  const { projectId } = request.params as any;
+
+  // One-strategy-per-symbol: infer symbol from latest signal; allow override via ?symbol=
+  const q = request.query as any;
+  let symbol = (q?.symbol ? String(q.symbol) : '').toUpperCase();
+
+  if (!symbol) {
+    const lastSig = await prisma.signal.findFirst({
+      where: { projectId },
+      orderBy: { createdAt: 'desc' },
+      select: { normalized: true, raw: true },
+    });
+    symbol =
+      String((lastSig as any)?.normalized?.symbol ?? (lastSig as any)?.raw?.symbol ?? '').toUpperCase();
+  }
+
+  if (!symbol) return reply.code(400).send({ error: 'NO_SYMBOL', message: 'No symbol found; pass ?symbol=BTCUSDT' });
+
+  const timestamp = Date.now();
+  const recvWindow = 5000;
+
+  async function signedGet(path: string, params: Record<string, string>) {
+    const qs = new URLSearchParams({
+      ...params,
+      timestamp: String(timestamp),
+      recvWindow: String(recvWindow),
+    }).toString();
+
+    const signature = signQuery(qs, binance.apiSecret);
+    const url = `${binance.baseUrl}${path}?${qs}&signature=${signature}`;
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { 'X-MBX-APIKEY': binance.apiKey },
+    });
+    const text = await res.text();
+    let json: any = null;
+    try { json = JSON.parse(text); } catch { json = null; }
+    return { ok: res.ok, status: res.status, text, json };
+  }
+
+  // Binance Futures endpoints (USD-M)
+  const [posRes, ooRes] = await Promise.all([
+    signedGet('/fapi/v2/positionRisk', { symbol }),
+    signedGet('/fapi/v1/openOrders', { symbol }),
+  ]);
+
+  if (!posRes.ok) {
+    return reply.code(502).send({ error: 'BINANCE_positionRisk', status: posRes.status, body: posRes.text });
+  }
+  if (!ooRes.ok) {
+    return reply.code(502).send({ error: 'BINANCE_openOrders', status: ooRes.status, body: ooRes.text });
+  }
+
+  const positions = posRes.json ?? [];
+  const openOrders = ooRes.json ?? [];
+
+  // Return both raw + a compact summary (UI can render summary easily)
+  const summary = (positions || []).map((p: any) => ({
+    symbol: p.symbol,
+    positionSide: p.positionSide,
+    positionAmt: p.positionAmt,
+    entryPrice: p.entryPrice,
+    markPrice: p.markPrice,
+    unrealizedProfit: p.unRealizedProfit ?? p.unrealizedProfit,
+    leverage: p.leverage,
+    marginType: p.marginType,
+    liquidationPrice: p.liquidationPrice,
+    notional: p.notional,
+    updateTime: p.updateTime,
+  }));
+
+  return reply.send({
+    projectId,
+    testnet: binance.isTestnet,
+    baseUrl: binance.baseUrl,
+    symbol,
+    positions: summary,
+    openOrdersCount: Array.isArray(openOrders) ? openOrders.length : 0,
+    openOrders,
+  });
+});
+
 server.listen({ port, host: '0.0.0.0' }).then(() => {
   console.log(`Executor listening on ${port}`);
   setInterval(processSignals, 5000);

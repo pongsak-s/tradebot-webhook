@@ -11,6 +11,30 @@ type Summary = {
   lastExecutionAt: string | null;
 };
 
+type RiskResponse = {
+  projectId: string;
+  testnet: boolean;
+  baseUrl: string;
+  symbol: string;
+  positions: RiskPosition[];
+  openOrdersCount: number;
+  openOrders: any[];
+};
+
+type RiskPosition = {
+  symbol: string;
+  positionSide: string;
+  positionAmt: string;
+  entryPrice: string;
+  markPrice: string;
+  unrealizedProfit: string;
+  leverage: string;
+  marginType: string;
+  liquidationPrice: string;
+  notional: string;
+  updateTime: number;
+};
+
 type ExecutionsResponse = {
   total: number;
   limit: number;
@@ -59,10 +83,12 @@ function fmtTs(ts: string | null) {
 export default function ProjectDetailPage() {
   const { projectId } = useParams();
   const apiBase = useMemo(() => import.meta.env.VITE_API_URL as string, []);
+  const executorBase = useMemo(() => import.meta.env.VITE_EXECUTOR_URL as string, []);
 
   const [summary, setSummary] = useState<Summary | null>(null);
   const [signals, setSignals] = useState<SignalsResponse | null>(null);
   const [executions, setExecutions] = useState<ExecutionsResponse | null>(null);
+  const [risk, setRisk] = useState<RiskResponse | null>(null);
 
   const [tab, setTab] = useState<TabKey>("signals");
   const [err, setErr] = useState<string | null>(null);
@@ -112,6 +138,25 @@ export default function ProjectDetailPage() {
       .then(setExecutions)
       .catch((e) => setErr(String(e?.message ?? e)));
   }, [apiBase, projectId, tab]);
+
+  // Risk (live from executor) (only when tab is active)
+  useEffect(() => {
+    if (!projectId) return;
+    if (tab !== "risk") return;
+
+    setErr(null);
+    setRisk(null);
+
+    // symbol inferred server-side; allow manual override later
+    fetch(`${executorBase}/v1/projects/${projectId}/risk`)
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+        return r.json();
+      })
+      .then(setRisk)
+      .catch((e) => setErr(String(e?.message ?? e)));
+  }, [executorBase, projectId, tab]);
+
 
 
 
@@ -308,8 +353,72 @@ export default function ProjectDetailPage() {
         )}
 
         {tab === "risk" && (
-          <div style={panelStyle}>
-            <b>Next:</b> Risk panel (Binance position / leverage / margin).
+          <div style={{ padding: 12, border: "1px solid #eee", borderRadius: 8, background: "white" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+              <div style={{ fontWeight: 700 }}>Live Risk</div>
+              <div style={{ fontSize: 12, opacity: 0.75 }}>
+                {risk ? `${risk.testnet ? "TESTNET" : "PROD"} • ${risk.symbol} • openOrders ${risk.openOrdersCount}` : "loading…"}
+              </div>
+            </div>
+
+            {risk && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12, marginBottom: 12 }}>
+                <div style={cardStyle}>
+                  <div style={cardTitle}>Venue</div>
+                  <div style={cardValue} title={risk.baseUrl}>{risk.testnet ? "Binance Testnet" : "Binance"}</div>
+                  <div style={cardMeta}>{risk.baseUrl}</div>
+                </div>
+                <div style={cardStyle}>
+                  <div style={cardTitle}>Open Orders</div>
+                  <div style={cardValue}>{risk.openOrdersCount}</div>
+                  <div style={cardMeta}>For {risk.symbol}</div>
+                </div>
+                <div style={cardStyle}>
+                  <div style={cardTitle}>Positions</div>
+                  <div style={cardValue}>{risk.positions?.length ?? 0}</div>
+                  <div style={cardMeta}>Hedge mode shows LONG/SHORT</div>
+                </div>
+              </div>
+            )}
+
+            {risk && risk.positions && risk.positions.length > 0 && (
+              <div style={{ overflowX: "auto" }}>
+                <table style={tableStyle}>
+                  <thead>
+                    <tr>
+                      <th style={thStyle}>Side</th>
+                      <th style={thStyle}>Amt</th>
+                      <th style={thStyle}>Entry</th>
+                      <th style={thStyle}>Mark</th>
+                      <th style={thStyle}>UPnL</th>
+                      <th style={thStyle}>Lev</th>
+                      <th style={thStyle}>Margin</th>
+                      <th style={thStyle}>Liq</th>
+                      <th style={thStyle}>Notional</th>
+                      <th style={thStyle}>Updated</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {risk.positions.map((p) => (
+                      <tr key={`${p.symbol}-${p.positionSide}`}>
+                        <td style={tdStyle}>{p.positionSide}</td>
+                        <td style={tdStyleMono}>{p.positionAmt}</td>
+                        <td style={tdStyleMono}>{p.entryPrice}</td>
+                        <td style={tdStyleMono}>{p.markPrice}</td>
+                        <td style={tdStyleMono}>{p.unrealizedProfit}</td>
+                        <td style={tdStyle}>{p.leverage}</td>
+                        <td style={tdStyle}>{p.marginType}</td>
+                        <td style={tdStyleMono}>{p.liquidationPrice}</td>
+                        <td style={tdStyleMono}>{p.notional}</td>
+                        <td style={tdStyle}>{p.updateTime ? new Date(p.updateTime).toLocaleString() : "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {risk && (!risk.positions || risk.positions.length === 0) && <div>No positionRisk rows returned.</div>}
           </div>
         )}
       </div>
