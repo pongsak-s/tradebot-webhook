@@ -24,9 +24,10 @@ export function getBinanceConfig(): BinanceConfig {
       ? 'https://demo-fapi.binance.com'
       : 'https://fapi.binance.com';
 
-  if (!isTestnet && dryRun === false) {
+  const allowMainnet = process.env.ALLOW_MAINNET === 'true';
+  if (!isTestnet && dryRun === false && !allowMainnet) {
     throw new Error(
-      'Refusing to place real mainnet orders without explicit approval'
+      'Refusing to place real mainnet orders without explicit approval (set ALLOW_MAINNET=true)'
     );
   }
 
