@@ -1,4 +1,5 @@
 import Fastify, { FastifyInstance } from 'fastify';
+import cors from '@fastify/cors';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { SignalSchema, Signal } from '@monorepo/shared';
 
@@ -10,6 +11,15 @@ export interface WebhookOptions {
 export function buildServer(opts: WebhookOptions): FastifyInstance {
   const server = Fastify();
   const { prisma, webhookSecret } = opts;
+
+  // CORS for local UI dev (Vite on :3002)
+  server.register(cors, {
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true)
+      const allow = ['http://localhost:3002', 'http://127.0.0.1:3002']
+      cb(null, allow.includes(origin))
+    }
+  });
 
   server.post('/v1/webhook/tradingview', async (request, reply) => {
     // TradingView cannot send custom headers reliably; authenticate via body.secret
@@ -65,6 +75,111 @@ export function buildServer(opts: WebhookOptions): FastifyInstance {
     });
     return reply.send({ signals });
   });
+  server.get('/v1/projects/:projectId/summary', async (request, reply) => {
+    const { projectId } = request.params as any;
+
+    const project = await prisma.project.findUnique({ where: { id: projectId } });
+    if (!project) return reply.code(404).send({ error: 'Project not found' });
+
+    const [signalsCount, executionsCount, lastSignal, lastExecution] = await Promise.all([
+      prisma.signal.count({ where: { projectId } }),
+      prisma.execution.count({ where: { projectId } }),
+      prisma.signal.findFirst({ where: { projectId }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
+      prisma.execution.findFirst({ where: { projectId }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
+    ]);
+
+    // NOTE: realizedPnL is placeholder for now; proper PnL needs fills/income sync.
+    return reply.send({
+      projectId,
+      status: project.killSwitchEnabled ? 'KILL_SWITCH' : 'ACTIVE',
+      signalsCount,
+      executionsCount,
+      realizedPnL: 0,
+      lastSignalAt: lastSignal?.createdAt ?? null,
+      lastExecutionAt: lastExecution?.createdAt ?? null,
+    });
+  });
+
+  // Phase 2: Kill Switch toggle (PIN required)
+  server.post('/v1/projects/:projectId/kill-switch', async (request, reply) => {
+    const { projectId } = request.params as any;
+    const body = (request.body ?? {}) as any;
+    const enabled = !!body.enabled;
+    const pin = String(body.pin ?? '');
+
+    const expectedPin = process.env.UI_ADMIN_PIN || '1234';
+    if (pin !== expectedPin) {
+      return reply.code(401).send({ error: 'INVALID_PIN' });
+    }
+
+    const updated = await prisma.project.update({
+      where: { id: projectId },
+      data: { killSwitchEnabled: enabled },
+      select: { id: true, killSwitchEnabled: true },
+    });
+
+    return reply.send(updated);
+  });
+
+  server.get('/v1/projects/:projectId/signals', async (request, reply) => {
+    const { projectId } = request.params as any;
+    const { limit = '50', offset = '0' } = request.query as any;
+
+    const take = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
+    const skip = Math.max(0, parseInt(offset, 10) || 0);
+
+    const [items, total] = await Promise.all([
+      prisma.signal.findMany({
+        where: { projectId },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+        select: {
+          createdAt: true,
+          signalId: true,
+          projectId: true,
+          status: true,
+          normalized: true,
+          raw: true,
+        },
+      }),
+      prisma.signal.count({ where: { projectId } }),
+    ]);
+
+    return reply.send({ total, limit: take, offset: skip, items });
+  });
+  server.get('/v1/projects/:projectId/executions', async (request, reply) => {
+    const { projectId } = request.params as any;
+    const { limit = '50', offset = '0' } = request.query as any;
+
+    const take = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
+    const skip = Math.max(0, parseInt(offset, 10) || 0);
+
+    const [items, total] = await Promise.all([
+      prisma.execution.findMany({
+        where: { projectId },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+        select: {
+          id: true,
+          createdAt: true,
+          projectId: true,
+          signalId: true,
+          type: true,
+          status: true,
+          orderId: true,
+          exchangeRaw: true,
+        },
+      }),
+      prisma.execution.count({ where: { projectId } }),
+    ]);
+
+    return reply.send({ total, limit: take, offset: skip, items });
+  });
+
+
+
 
   server.get('/healthz', async () => ({ status: 'ok' }));
 

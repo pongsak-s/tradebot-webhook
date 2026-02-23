@@ -33,6 +33,7 @@ enum SignalStatus {
 model Project {
   id           String        @id
   createdAt    DateTime      @default(now())
+  killSwitchEnabled Boolean     @default(false)
   signals      Signal[]
   executions   Execution[]
   positions    Position[]
@@ -53,6 +54,8 @@ model Signal {
 }
 
 model Execution {
+  orderId     String?
+  exchangeRaw Json?
   id Int @id @default(autoincrement())
 
   signalId Int

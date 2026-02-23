@@ -9,6 +9,7 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@fastify/cors": "^11.2.0",
     "@monorepo/shared": "*",
     "@prisma/client": "*",
     "dotenv": "^10.0.0",
